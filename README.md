@@ -2,7 +2,7 @@
 <img src="https://github.com/Starlitnightly/OmicFate/blob/main/assets/logo.png" width="400">
 </h1><br>
 
-[![pypi-badge](https://img.shields.io/pypi/v/omicfate)](https://pypi.org/project/omicfate) [![Documentation Status](https://readthedocs.org/projects/omicverse/badge/?version=latest)](https://omicverse.readthedocs.io/en/latest/?badge=latest) [![pypiDownloads](https://static.pepy.tech/badge/omicfate)](https://pepy.tech/project/omicfate) [![License:GPL](https://img.shields.io/badge/license-GNU-blue)](https://img.shields.io/apm/l/vim-mode)
+[![pypi-badge](https://img.shields.io/pypi/v/omicfate)](https://pypi.org/project/omicfate) [![Documentation Status](https://readthedocs.org/projects/omicverse/badge/?version=latest)](https://omicverse.readthedocs.io/en/latest/?badge=latest) [![License:GPL](https://img.shields.io/badge/license-GNU-blue)](https://img.shields.io/apm/l/vim-mode)
 
 **`OmicFate`**, an algorithm for predicting fate factors from cell state density and pseudotime regression weights. , please read our paper: [OmicFate: Unraveling the Secrets of Cellular Fate Determination]()
 
@@ -31,7 +31,6 @@ You can use `pip install -U omicfate` for installation.
 ## `4` [Contact](#)
 
 - Zehua Zeng ([starlitnightly@gmail.com](mailto:starlitnightly@gmail.com) or [zehuazeng@xs.ustb.edu.cn](mailto:zehuazeng@xs.ustb.edu.cn))
-- Lei Hu ([hulei@westlake.edu.cn](mailto:hulei@westlake.edu.cn))
 
 ## `5` [Other](#)
 
