@@ -7,7 +7,7 @@
 
 **`OmicFate`**, an algorithm for predicting fate factors from cell state density and pseudotime regression weights. , please read our paper: [OmicFate: Unraveling the Secrets of Cellular Fate Determination]()
 
-## `1` [Introduction][#]
+## `1` [Introduction](#)
 
 Cellular pseudotime-related factors characterize participants in the temporal process of the cellular differentiation spectrum, and early regulators are essential for revealing the dynamic regulatory processes of cellular differentiation. Here, we present the histological fate factor prediction algorithm OmicFate, an algorithm for predicting fate factors from cell state density and pseudotime regression weights. We demonstrate the validity of OmicFate by dissecting genes, cellular interactions, and pathways in the early developmental spectrum, and we present evidence that addresses the temporal preference of the traditional pseudotime-related factor, emphasizing the importance of continuous processes in cell development. At the same time, OmicFate provides insights into exogenous cellular interactions in early lineage differentiation, emphasizing the importance of phylogenetics in understanding the differentiation process.
 
