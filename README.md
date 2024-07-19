@@ -2,7 +2,8 @@
 <img src="https://github.com/Starlitnightly/OmicFate/blob/main/assets/logo.png" width="400">
 </h1><br>
 
-[![pypi-badge](https://img.shields.io/pypi/v/omicfate)](https://pypi.org/project/omicfate) [![Documentation Status](https://readthedocs.org/projects/omicverse/badge/?version=latest)](https://omicverse.readthedocs.io/en/latest/?badge=latest) [![License:GPL](https://img.shields.io/badge/license-GNU-blue)](https://img.shields.io/apm/l/vim-mode)
+[![pypi-badge](https://img.shields.io/pypi/v/omicfate)](https://pypi.org/project/omicfate) [![Documentation Status](https://readthedocs.org/projects/omicverse/badge/?version=latest)](https://omicverse.readthedocs.io/en/latest/?badge=latest) [![License:GPL](https://img.shields.io/badge/license-GNU-blue)](https://img.shields.io/apm/l/vim-mode) ![Static Badge](https://img.shields.io/badge/build-ecosystem-brightgreen?style=flat&logo=test&logoColor=hex&label=omicverse&labelColor=hex&color=hex&link=https%3A%2F%2Fgithub.com%2FStarlitnightly%2Fomicverse)
+
 
 **`OmicFate`**, an algorithm for predicting fate factors from cell state density and pseudotime regression weights. , please read our paper: [OmicFate: Unraveling the Secrets of Cellular Fate Determination]()
 
