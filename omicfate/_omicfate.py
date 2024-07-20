@@ -1,16 +1,35 @@
+"""
+This module contains the implementation of the Fate class.
+"""
+from dataclasses import dataclass
+import anndata
 import pandas as pd
-from sklearn.linear_model import Ridge
 import numpy as np
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 import scanpy as sc
-import anndata 
 import matplotlib.pyplot as plt
 from sklearn.preprocessing import MinMaxScaler
+from sklearn.linear_model import Ridge
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 
 
 
-class Fate(object):
+@dataclass
+class ATRParams:
+    """
+    Parameters for Adaptive Threshold Regression
+    """
+    test_size: float = 0.4
+    random_state: int = 112
+    alpha: float = 0.1
+    stop: int = 100
+    flux: float = 0.01
+    related: bool = False
+
+class Fate:
+    """
+    Omicfate model
+    """
 
     def __init__(self,adata:anndata.AnnData,pseudotime:str):
         """
@@ -38,29 +57,32 @@ class Fate(object):
             res_pd_ievt: pd.DataFrame, the result of ridge model 
         
         """
-        X = self.adata.to_df()
+        x = self.adata.to_df()
         y = self.adata.obs.loc[:,self.pseudotime]
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, 
+        x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=test_size,
                                                             random_state=random_state)
         # 初始化Ridge模型并拟合训练数据
         self.ridge = Ridge(alpha=alpha)
-        self.ridge.fit(X_train, y_train)
+        self.ridge.fit(x_train, y_train)
 
         # 预测测试集并计算均方误差
-        y_pred = self.ridge.predict(X_test)
+        y_pred = self.ridge.predict(x_test)
         self.y_test_r=y_test
         self.y_pred_r=y_pred
 
         # 计算均方误差（MSE）
-        mse = mean_squared_error(y_test, y_pred)
-        rmse = mean_squared_error(y_test, y_pred, squared=False)
-        mae = mean_absolute_error(y_test, y_pred)
+        err_dict={}
+        err_dict['mse'] = mean_squared_error(y_test, y_pred)
+        err_dict['rmse'] = mean_squared_error(y_test, y_pred, squared=False)
+        err_dict['mae'] = mean_absolute_error(y_test, y_pred)
         r2 = r2_score(y_test, y_pred)
-        self.raw_mse=mse
-        self.raw_rmse=rmse
-        self.raw_mae=mae
+        self.raw_mse=err_dict['mse']
+        self.raw_rmse=err_dict['rmse']
+        self.raw_mae=err_dict['mae']
         self.raw_r2=r2
-        print("$MSE|RMSE|MAE|R^2$:{:.2}|{:.2}|{:.2}|{:.2}".format(mse,rmse,mae,r2))
+        print("$MSE|RMSE|MAE|R^2$:{:.2}|{:.2}|{:.2}|{:.2}".format(err_dict['mse'],
+                                                                  err_dict['rmse'],
+                                                                  err_dict['mae'],r2))
 
         res_pd_ievt=pd.DataFrame(index=self.adata.to_df().columns)
         res_pd_ievt['coef']=self.ridge.coef_
@@ -70,7 +92,7 @@ class Fate(object):
 
         self.coef=res_pd_ievt
         return res_pd_ievt
-    
+
     def atac_init(self,columns,gene_name='neargene'):
         """
         Initialize the atac model
@@ -95,10 +117,10 @@ class Fate(object):
         
         """
         related_genes=self.peak_pd.loc[peak,self.atac_gene_name].unique()
-        return self.peak_pd.loc[self.peak_pd[self.atac_gene_name].isin(related_genes)].index.tolist()
+        return self.peak_pd.loc[self.peak_pd[self.atac_gene_name\
+                                             ].isin(related_genes)].index.tolist()
 
-    def ATR(self,test_size:float=0.4,random_state:int=112,
-            alpha:float=0.1,stop:int=100,flux=0.01,related=False)->pd.DataFrame:
+    def atr(self,params: ATRParams)->pd.DataFrame:
         """
         Adaptive Threshold Regression
 
@@ -114,6 +136,13 @@ class Fate(object):
             res_pd: pd.DataFrame, the result of ridge model
         
         """
+        test_size = params.test_size
+        random_state = params.random_state
+        alpha = params.alpha
+        stop = params.stop
+        flux = params.flux
+        related = params.related
+
         res_pd=pd.DataFrame()
         coef_threshold_li=[]
         r2_li=[]
@@ -122,22 +151,22 @@ class Fate(object):
         for i in tqdm(self.coef['abs(coef)'].values[1:]):
             coef_threshold_li.append(i)
             train_idx=self.coef.loc[self.coef['abs(coef)']>=i].index.values
-            if related == True:
+            if related is True:
                 train_idx=self.get_related_peak(train_idx)
 
             adata_t=self.adata[:,train_idx]
 
-            X = adata_t.to_df()
+            x = adata_t.to_df()
             y = adata_t.obs.loc[:,self.pseudotime]
-            X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, 
+            x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=test_size,
                                                                 random_state=random_state)
             # 初始化Ridge模型并拟合训练数据
             self.ridge_t = Ridge(alpha=alpha)
-            self.ridge_t.fit(X_train, y_train)
-    
+            self.ridge_t.fit(x_train, y_train)
+
             # 预测测试集并计算均方误差
-            y_pred = self.ridge_t.predict(X_test)
-    
+            y_pred = self.ridge_t.predict(x_test)
+
             # 计算均方误差（MSE）
             #mse = mean_squared_error(y_test, y_pred)
             #rmse = mean_squared_error(y_test, y_pred, squared=False)
@@ -154,9 +183,10 @@ class Fate(object):
         for i in res_pd.index:
             if res_pd.loc[i,'r2']>=self.raw_r2-flux:
                 self.coef_threshold=res_pd.loc[i,'coef_threshold']
-                print("coef_threshold:{}, r2:{}".format(res_pd.loc[i,'coef_threshold'],res_pd.loc[i,'r2']))
+                print("coef_threshold:{}, r2:{}".format(res_pd.loc[i,'coef_threshold'],
+                                                        res_pd.loc[i,'r2']))
                 break
-            
+
         self.max_threshold=res_pd
         return res_pd
 
@@ -176,32 +206,35 @@ class Fate(object):
         
         """
         train_idx=self.coef.loc[self.coef['abs(coef)']>=self.coef_threshold].index.values
-        if related == True:
+        if related is True:
             train_idx=self.get_related_peak(train_idx)
         adata_t=self.adata[:,train_idx]
-        X = adata_t.to_df()
+        x = adata_t.to_df()
         y = adata_t.obs.loc[:,self.pseudotime]
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, 
+        x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=test_size,
                                                             random_state=random_state)
         # 初始化Ridge模型并拟合训练数据
         self.ridge_f = Ridge(alpha=alpha)
-        self.ridge_f.fit(X_train, y_train)
+        self.ridge_f.fit(x_train, y_train)
 
         # 预测测试集并计算均方误差
-        y_pred = self.ridge_f.predict(X_test)
+        y_pred = self.ridge_f.predict(x_test)
         self.y_test_f=y_test
         self.y_pred_f=y_pred
 
         # 计算均方误差（MSE）
-        mse = mean_squared_error(y_test, y_pred)
-        rmse = mean_squared_error(y_test, y_pred, squared=False)
-        mae = mean_absolute_error(y_test, y_pred)
-        self.filter_mse=mse
-        self.filter_rmse=rmse
-        self.filter_mae=mae
+        err_dict={}
+        err_dict['mse'] = mean_squared_error(y_test, y_pred)
+        err_dict['rmse'] = mean_squared_error(y_test, y_pred, squared=False)
+        err_dict['mae'] = mean_absolute_error(y_test, y_pred)
+        self.filter_mse=err_dict['mse']
+        self.filter_rmse=err_dict['rmse']
+        self.filter_mae=err_dict['mae']
         r2 = r2_score(y_test, y_pred)
         self.filter_r2=r2
-        print("$MSE|RMSE|MAE|R^2$:{:.2}|{:.2}|{:.2}|{:.2}".format(mse,rmse,mae,r2))
+        print("$MSE|RMSE|MAE|R^2$:{:.2}|{:.2}|{:.2}|{:.2}".format(err_dict['mse'],
+                                                                  err_dict['rmse'],
+                                                                  err_dict['mae'],r2))
 
         res_pd_ievt=pd.DataFrame(index=adata_t.to_df().columns)
         res_pd_ievt['coef']=self.ridge_f.coef_
@@ -211,9 +244,11 @@ class Fate(object):
 
         self.filter_coef=res_pd_ievt
         return res_pd_ievt
-    
+
     def kendalltau_filter(self):
-        import pandas as pd
+        """
+        kendalltau filter
+        """
         from scipy.stats import kendalltau
         test_pd=pd.DataFrame()
         mk_sta_li=[]
@@ -227,9 +262,9 @@ class Fate(object):
         test_pd['kendalltau_sta']=mk_sta_li
         test_pd['pvalue']=mk_p_li
         test_pd.index=self.filter_coef.index.tolist()
-        self.kendalltau_filter=test_pd
+        self.kendalltau_filter_pd=test_pd
         return test_pd
-    
+
     def low_density(self,
                     n_components: int = 10,
                     knn: int = 30,
@@ -240,21 +275,24 @@ class Fate(object):
                     sim_key: str = "DM_Similarity",
                     eigval_key: str = "DM_EigenValues",
                     eigvec_key: str = "DM_EigenVectors",):
+        """
+        Calculate the low density of data
+        """
         try:
             import mellon
-        except:
+        except ImportError:
             print("Please install mellon package first using ``pip install mellon``")
         from palantir.utils import run_diffusion_maps
         run_diffusion_maps(self.adata,n_components=n_components,knn=knn,alpha=alpha,seed=seed,
                            pca_key=pca_key,kernel_key=kernel_key,sim_key=sim_key,
                            eigval_key=eigval_key,eigvec_key=eigvec_key)
-        
+
         model = mellon.DensityEstimator(d_method="fractal")
         log_density = model.fit_predict(self.adata.obsm["DM_EigenVectors"])
         self.adata.obs["mellon_log_density_lowd"] = log_density
 
 
-    
+
     def lineage_score(self,cluster_key:str,lineage=None,
                     cell_mask= "specification",
                     density_key: str = "mellon_log_density_lowd",
@@ -263,13 +301,16 @@ class Fate(object):
                     expression_key: str = "MAGIC_imputed_data",
                     distances_key: str = "distances",
                     ):
+        """
+        Calculate the lineage score
+        """
         from palantir.utils import run_low_density_variability,run_local_variability
-        
+
         if localvar_key not in self.adata.layers.keys():
             print("Run low_density first")
             run_local_variability(self.adata,expression_key=expression_key,
                                   distances_key=distances_key,localvar_key=localvar_key)
-        import pandas as pd
+
         specification_cells = (
             self.adata.obs[cluster_key].isin(lineage)
         )
@@ -281,60 +322,60 @@ class Fate(object):
                                     density_key=density_key,
                                     score_key="change_scores",
                                 )
-        print(f"The lineage score stored in adata.var['change_scores_lineage']")
+        print("The lineage score stored in adata.var['change_scores_lineage']")
 
 
-    
-    def get_coef(self,type:str='raw')->pd.DataFrame:
+
+    def get_coef(self,coef_type:str='raw')->pd.DataFrame:
         """
         Get the coef of model
 
         Arguments:
-            type: str, the type of coef, 'raw' or 'filter'
+            coef_type: str, the type of coef, 'raw' or 'filter'
 
         Returns:
             coef: pd.DataFrame, the coef of model
 
         """
 
-        if type=='raw':
+        if coef_type=='raw':
             return self.coef
-        elif type=='filter':
+        if coef_type=='filter':
             return self.filter_coef
-        
-    def get_r2(self,type:str='raw')->float:
+
+    def get_r2(self,r2_type:str='raw')->float:
         """
         Get the r2 of model
 
         Arguments:
-            type: str, the type of r2, 'raw' or 'filter'
+            coef_type: str, the type of r2, 'raw' or 'filter'
 
         Returns:
             r2: float, the r2 of model
 
         """
-        if type=='raw':
+        if r2_type=='raw':
             return self.raw_r2
-        elif type=='filter':
+        if r2_type=='filter':
             return self.filter_r2
-        
-    def get_mse(self,type:str='raw')->pd.DataFrame:
+
+    def get_mse(self,mse_type:str='raw')->pd.DataFrame:
         """
         Get the mse of model
 
         Arguments:
-            type: str, the type of mse, 'raw' or 'filter'
+            coef_type: str, the type of mse, 'raw' or 'filter'
 
         Returns:
             mse: float, the mse of model
 
         """
-        if type=='raw':
+        if mse_type=='raw':
             return self.raw_mse
-        elif type=='filter':
+        if mse_type=='filter':
             return self.filter_mse
-        
-    def get_rmse(self,type:str='raw')->pd.DataFrame:
+
+    def get_rmse(self,rmse_type:str='raw')->pd.DataFrame:
         """
         Get the rmse of model
 
@@ -345,12 +386,12 @@ class Fate(object):
             rmse: float, the rmse of model
 
         """
-        if type=='raw':
+        if rmse_type=='raw':
             return self.raw_rmse
-        elif type=='filter':
+        if rmse_type=='filter':
             return self.filter_rmse
-        
-    def get_mae(self,type:str='raw')->pd.DataFrame:
+
+    def get_mae(self,mae_type:str='raw')->pd.DataFrame:
         """
         Get the mae of model
 
@@ -361,9 +402,9 @@ class Fate(object):
             mae: float, the mae of model
 
         """
-        if type=='raw':
+        if mae_type=='raw':
             return self.raw_mae
-        elif type=='filter':
+        if mae_type=='filter':
             return self.filter_mae
 
     def plot_filtering(self,figsize:tuple=(3,3),color:str='#5ca8dc',
@@ -457,10 +498,10 @@ class Fate(object):
                          fontsize=fontsize)
 
         return fig,ax
-    
+
     def plot_color_fitting(self,type:str='raw',cluster_key:str='clusters',
                      figsize:tuple=(3,3),color:str='#6BBBA0',
-                    fontsize:int=12,legend_loc:list=[0.2,0.1,0],omics='RNA')->tuple:
+                    fontsize:int=12,legend_loc=None,omics='RNA')->tuple:
         """
         Plot the colorful of clusters fitting result
 
@@ -479,6 +520,8 @@ class Fate(object):
         
         """
         #fontsize=13
+        if legend_loc is None:
+            legend_loc=[0.2,0.1,0]
         fig, ax = plt.subplots(figsize=figsize)
         if type=='raw':
             y_test=self.y_test_r
@@ -488,7 +531,7 @@ class Fate(object):
             y_test=self.y_test_f
             y_pred=pd.Series(self.y_pred_f)
             y_pred.index=y_test.index
-        
+
         from scipy.stats import linregress
         slope, intercept, r_value, p_value, std_err = linregress(y_test, y_pred)
         line = slope * y_test + intercept
@@ -506,19 +549,23 @@ class Fate(object):
                             self.adata.uns['{}_colors'.format(cluster_key)]))
         else:
             if len(self.adata.obs[cluster_key].cat.categories)>28:
-                color_dict=dict(zip(self.adata.obs[cluster_key].cat.categories,sc.pl.palettes.default_102))
+                color_dict=dict(zip(self.adata.obs[cluster_key].cat.categories,
+                                    sc.pl.palettes.default_102))
             else:
-                color_dict=dict(zip(self.adata.obs[cluster_key].cat.categories,sc.pl.palettes.zeileis_28))
-        
+                color_dict=dict(zip(self.adata.obs[cluster_key].cat.categories,
+                                    sc.pl.palettes.zeileis_28))
+
 
         for i in self.adata.obs[cluster_key].cat.categories:
-            ax.scatter(y_test[list(set(self.adata.obs.loc[self.adata.obs[cluster_key]==i].index)&set(y_test.index))],
-                    y_pred[list(set(self.adata.obs.loc[self.adata.obs[cluster_key]==i].index)&set(y_pred.index))],
+            ax.scatter(y_test[list(set(self.adata.obs.loc[self.adata.obs[cluster_key]==\
+                                                          i].index)&set(y_test.index))],
+                    y_pred[list(set(self.adata.obs.loc[self.adata.obs[cluster_key]==\
+                                                       i].index)&set(y_pred.index))],
                     color=color_dict[i])
-        ax.plot(y_test, line, color=color, 
+        ax.plot(y_test, line, color=color,
                 label='Fit: y = {:.2f}x + {:.2f}'.format(slope, intercept),
             linewidth=3)
-        ax.fill_between(y_test, lower_bound, upper_bound, 
+        ax.fill_between(y_test, lower_bound, upper_bound,
                         color='grey', alpha=0.2, label='95% Confidence Interval')
 
         #sns.regplot(x=y_test,y=y_pred,ax=ax,line_kws={'color':color},
@@ -538,12 +585,15 @@ class Fate(object):
 
         from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
         mse = mean_squared_error(y_test, y_pred)
-        rmse = mean_squared_error(y_test, y_pred, squared=False)
+        #rmse = mean_squared_error(y_test, y_pred, squared=False)
         mae = mean_absolute_error(y_test, y_pred)
         r2 = r2_score(y_test, y_pred)
-        ax.text(1,legend_loc[0],'$r^2={:.2}$'.format(r2),fontsize=fontsize+1,horizontalalignment='right')
-        ax.text(1,legend_loc[1],'$MSE={:.2}$'.format(mse),fontsize=fontsize+1,horizontalalignment='right')
-        ax.text(1,legend_loc[2],'$MAE={:.2}$'.format(mae),fontsize=fontsize+1,horizontalalignment='right')
+        ax.text(1,legend_loc[0],'$r^2={:.2}$'.format(r2),
+                fontsize=fontsize+1,horizontalalignment='right')
+        ax.text(1,legend_loc[1],'$MSE={:.2}$'.format(mse),
+                fontsize=fontsize+1,horizontalalignment='right')
+        ax.text(1,legend_loc[2],'$MAE={:.2}$'.format(mae),
+                fontsize=fontsize+1,horizontalalignment='right')
 
         if type=='filter':
             ax.set_title(f'Regression {omics}\nDimension: {self.filter_coef.shape[0]}',
@@ -554,7 +604,10 @@ class Fate(object):
         return fig,ax
 
 
-class gene_trends(object):
+class GeneTrends:
+    """
+    Trends of gene with pseudotime
+    """
 
     def __init__(self,adata,pseudotime,var_names):
         """
@@ -581,14 +634,14 @@ class gene_trends(object):
         """
         import numpy as np
         from scipy.spatial.distance import euclidean
-        
-        
+
+
         from scipy.sparse import issparse
 
         adata=self.adata
         pseudotime=self.pseudotime
         var_names=self.var_names
-        
+
         time = adata.obs[pseudotime].values
         time = time[np.isfinite(time)]
         X = (
@@ -597,36 +650,37 @@ class gene_trends(object):
         if issparse(X):
             X = X.A
         df = pd.DataFrame(X[np.argsort(time)], columns=var_names)
-        
+
 
         if n_convolve is not None:
             weights = np.ones(n_convolve) / n_convolve
             for gene in var_names:
-                # TODO: Handle exception properly
                 try:
                     df[gene] = np.convolve(df[gene].values, weights, mode="same")
                 except ValueError as e:
                     print(f"Skipping variable {gene}: {e}")
                     pass  # e.g. all-zero counts or nans cannot be convolved
-        
+
         max_sort = np.argsort(np.argmax(df.values, axis=0))
         df = pd.DataFrame(df.values[:, max_sort], columns=df.columns[max_sort])
         scaler = MinMaxScaler()
         normalized_data = scaler.fit_transform(df)
-        self.normalized_pd=pd.DataFrame(normalized_data,columns=df.columns,index=adata.obs[pseudotime].sort_values().index)
+        self.normalized_pd=pd.DataFrame(normalized_data,
+                                        columns=df.columns,
+                                        index=adata.obs[pseudotime].sort_values().index)
         self.normalized_data=normalized_data
         from statsmodels.tsa.stattools import adfuller
-    
+
         # 生成示例时间序列数据
         np.random.seed(0)
         #time_series = np.random.rand(20)
-        
+
         # 执行Cox-Stuart检验
         max_avg_li=[]
         for data_array in normalized_data:
             # 找到值大于 0.8 的元素的索引
             indices = np.where(data_array > np.max(data_array)*0.8)
-            
+
             # 计算索引的平均值
             average_index = np.mean(indices)
             #print(average_index)
@@ -643,21 +697,21 @@ class gene_trends(object):
         
         """
         return self.normalized_data
-    
+
     def get_kendalltau(self):
         """
         Get the kendalltau of trends
         
         """
         return self.kt
-    
+
     def get_linregress(self):
         """
         Get the linregress of trends
         
         """
         return self.lr
-    
+
     def cal_border_cell(self,adata:anndata.AnnData,
                         pseudotime:str,cluster_key:str,
                         threshold:float=0.1):
@@ -679,16 +733,20 @@ class gene_trends(object):
             pseudotime_min=np.min(adata.obs.loc[adata.obs[cluster_key]==cluster,pseudotime])
             pseudotime_max=np.max(adata.obs.loc[adata.obs[cluster_key]==cluster,pseudotime])
             ## set smaller than 10% and larger than 90% as border cells
-            border_idx=cluster_obs.loc[(cluster_obs[pseudotime]<pseudotime_min+threshold*(pseudotime_max-pseudotime_min))|
-                                        (cluster_obs[pseudotime]>=pseudotime_max-threshold*(pseudotime_max-pseudotime_min)),:].index
+            border_idx=cluster_obs.loc[(cluster_obs[pseudotime]<pseudotime_min+\
+                                        threshold*(pseudotime_max-pseudotime_min))|
+                                        (cluster_obs[pseudotime]>=pseudotime_max-\
+                                         threshold*(pseudotime_max-pseudotime_min)),:].index
             adata.obs.loc[border_idx,'border']=True
 
-            low_border_idx=cluster_obs.loc[(cluster_obs[pseudotime]<pseudotime_min+threshold*(pseudotime_max-pseudotime_min)),:].index
-            high_border_idx=cluster_obs.loc[(cluster_obs[pseudotime]>=pseudotime_max-threshold*(pseudotime_max-pseudotime_min)),:].index
+            low_border_idx=cluster_obs.loc[(cluster_obs[pseudotime]<pseudotime_min+\
+                                            threshold*(pseudotime_max-pseudotime_min)),:].index
+            high_border_idx=cluster_obs.loc[(cluster_obs[pseudotime]>=pseudotime_max-\
+                                             threshold*(pseudotime_max-pseudotime_min)),:].index
             adata.obs.loc[low_border_idx,'border_type']='low'
             adata.obs.loc[high_border_idx,'border_type']='high'
         print("adding ['border','border_type'] annotation to adata.obs")
-    
+
     def get_border_gene(self,adata:anndata.AnnData,
                         cluster_key:str,cluster1:str,cluster2:str,
                         num_gene:int=10,threshold=None):
@@ -713,15 +771,17 @@ class gene_trends(object):
         cluster2_mean=np.mean(adata.obs.loc[adata.obs[cluster_key]==cluster2,self.pseudotime])
         if cluster1_mean>cluster2_mean:
             cluster1,cluster2=cluster2,cluster1
-        max_cell_idx=adata.obs[(adata.obs[cluster_key]==cluster1)&(adata.obs['border_type']=='high')].index.tolist()
-        min_cell_idx=adata.obs[(adata.obs[cluster_key]==cluster2)&(adata.obs['border_type']=='low')].index.tolist()
-        #cell_idx=adata.obs[(adata.obs[cluster_key].isin([cluster1,cluster2])&(adata.obs['border']==True))].index
+        max_cell_idx=adata.obs[(adata.obs[cluster_key]==cluster1)&\
+                               (adata.obs['border_type']=='high')].index.tolist()
+        min_cell_idx=adata.obs[(adata.obs[cluster_key]==cluster2)&\
+                               (adata.obs['border_type']=='low')].index.tolist()
         data=self.normalized_pd.loc[min_cell_idx+max_cell_idx,:]
         #border_gene=data.mean().sort_values(ascending=False).index[:num_gene]
         # border_gene must larger than threshold
-        border_gene=data.mean()[data.mean()>=threshold].sort_values(ascending=False).index[:num_gene]
+        border_gene=data.mean()[data.mean()>=\
+                                threshold].sort_values(ascending=False).index[:num_gene]
         return border_gene
-        
+
     def get_multi_border_gene(self,adata:anndata.AnnData,
                         cluster_key:str,
                         num_gene:int=10,threshold=None):
@@ -741,15 +801,16 @@ class gene_trends(object):
         border_gene_dict={}
         for cluster1 in adata.obs[cluster_key].cat.categories:
             for cluster2 in adata.obs[cluster_key].cat.categories:
-                if f"{cluster2}_{cluster1}" in border_gene_dict.keys():
+                if f"{cluster2}_{cluster1}" in border_gene_dict:
                     continue
-                else:
-                    if cluster1!=cluster2:
-                        border_gene_dict[cluster1+'_'+cluster2]=self.get_border_gene(adata,
-                            cluster_key,cluster1,cluster2,
-                            num_gene=num_gene,threshold=threshold)
+                
+                if cluster1!=cluster2:
+                    border_gene_dict[cluster1+'_'+\
+                                        cluster2]=self.get_border_gene(adata,
+                        cluster_key,cluster1,cluster2,
+                        num_gene=num_gene,threshold=threshold)
         return border_gene_dict
-    
+
     def get_special_border_gene(self, adata:anndata.AnnData,
                                 cluster_key:str,cluster1:str,cluster2:str,):
         """
@@ -772,13 +833,13 @@ class gene_trends(object):
             cluster_name=f"{cluster2}_{cluster1}"
 
         border_genes=border_gene_dict[cluster_name]
-        for cluster in border_gene_dict.keys():
+        for cluster,section in border_gene_dict.items():
             if (cluster!=cluster1+'_'+cluster2)&(cluster!=cluster2+'_'+cluster1):
-                for border_gene in border_gene_dict[cluster]:
+                for border_gene in section:
                     if border_gene in border_genes:
                         border_genes=border_genes.drop(border_gene)
         return border_genes
-    
+
     def get_kernel_gene(self,adata:anndata.AnnData,cluster_key:str,cluster:str,
                         num_gene:int=10,threshold=None):
         """
@@ -797,13 +858,15 @@ class gene_trends(object):
         """
         if threshold is None:
             threshold=self.normalized_pd.mean().mean()
-        cell_idx=adata.obs[(adata.obs[cluster_key].isin([cluster])&(adata.obs['border']==False))].index
+        cell_idx=adata.obs[(adata.obs[cluster_key].isin([cluster])&\
+                            (adata.obs['border']==False))].index
         data=self.normalized_pd.loc[cell_idx,:]
         #border_gene=data.mean().sort_values(ascending=False).index[:num_gene]
         # border_gene must larger than threshold
-        border_gene=data.mean()[data.mean()>=threshold].sort_values(ascending=False).index[:num_gene]
+        border_gene=data.mean()[data.mean()>=\
+                                threshold].sort_values(ascending=False).index[:num_gene]
         return border_gene
-    
+
     def get_multi_kernel_gene(self,adata:anndata.AnnData,
                         cluster_key:str,num_gene:int=10,threshold=None):
         """
@@ -824,9 +887,9 @@ class gene_trends(object):
             kernel_gene_dict[cluster]=self.get_kernel_gene(adata,
                             cluster_key,cluster,
                             num_gene=num_gene,threshold=threshold)
-            
+
         return kernel_gene_dict
-    
+
     def get_special_kernel_gene(self, adata:anndata.AnnData,
                                 cluster_key:str,cluster:str,num_gene:int=10,):
         """
@@ -842,11 +905,12 @@ class gene_trends(object):
             kernel_gene: list, the list of kernel gene
         """
         # the border gene can't appear in other cluster
-        kernel_gene_dict=self.get_multi_kernel_gene(adata,cluster_key,num_gene=num_gene)
+        kernel_gene_dict=self.get_multi_kernel_gene(adata,
+                                                    cluster_key,num_gene=num_gene)
         kernel_genes=kernel_gene_dict[cluster]
-        for cluster in kernel_gene_dict.keys():
-            if cluster!=cluster:
-                for kernel_gene in kernel_gene_dict[cluster]:
+        for c,section in kernel_gene_dict.items():
+            if cluster!=c:
+                for kernel_gene in section:
                     if kernel_gene in kernel_genes:
                         kernel_genes=kernel_genes.drop(kernel_gene)
         return kernel_genes
@@ -877,7 +941,7 @@ class gene_trends(object):
         for data_array in self.normalized_data:
             # 找到值大于 0.8 的元素的索引
             indices = np.where(data_array >= np.max(data_array)*max_threshold)
-            
+
             # 计算索引的平均值
             average_index = np.mean(indices)
             #print(average_index)
@@ -885,7 +949,7 @@ class gene_trends(object):
         ax.scatter(range(len(max_avg_li)),max_avg_li,color=color)
         ax.spines['left'].set_position(('outward', 20))
         ax.spines['bottom'].set_position(('outward', 20))
-        
+
         ax.spines['top'].set_visible(False)
         ax.spines['right'].set_visible(False)
         ax.spines['bottom'].set_visible(True)
@@ -910,15 +974,18 @@ def mellon_density(adata,
                     sim_key: str = "DM_Similarity",
                     eigval_key: str = "DM_EigenValues",
                     eigvec_key: str = "DM_EigenVectors",):
-        try:
-            import mellon
-        except:
-            print("Please install mellon package first using ``pip install mellon``")
-        from palantir.utils import run_diffusion_maps
-        run_diffusion_maps(adata,n_components=n_components,knn=knn,alpha=alpha,seed=seed,
+    """
+    Calculate the low density of data
+    """
+    try:
+        import mellon
+    except ImportError:
+        print("Please install mellon package first using ``pip install mellon``")
+    from palantir.utils import run_diffusion_maps
+    run_diffusion_maps(adata,n_components=n_components,knn=knn,alpha=alpha,seed=seed,
                            pca_key=pca_key,kernel_key=kernel_key,sim_key=sim_key,
                            eigval_key=eigval_key,eigvec_key=eigvec_key)
-        
-        model = mellon.DensityEstimator(d_method="fractal")
-        log_density = model.fit_predict(adata.obsm["DM_EigenVectors"])
-        adata.obs["mellon_log_density_lowd"] = log_density
+
+    model = mellon.DensityEstimator(d_method="fractal")
+    log_density = model.fit_predict(adata.obsm["DM_EigenVectors"])
+    adata.obs["mellon_log_density_lowd"] = log_density
