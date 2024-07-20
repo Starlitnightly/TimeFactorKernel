@@ -1,3 +1,4 @@
+# pylint: disable=too-many-lines
 """
 This module contains the implementation of the Fate class.
 """
@@ -7,10 +8,12 @@ import pandas as pd
 import numpy as np
 import scanpy as sc
 import matplotlib.pyplot as plt
+import seaborn as sns
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.linear_model import Ridge
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
+from tqdm import tqdm
 
 
 
@@ -26,6 +29,8 @@ class ATRParams:
     flux: float = 0.01
     related: bool = False
 
+
+# pylint: disable=too-many-instance-attributes
 class Fate:
     """
     Omicfate model
@@ -42,6 +47,26 @@ class Fate:
         """
         self.adata=adata
         self.pseudotime=pseudotime
+        self.ridge_f=None
+        self.ridge=None
+        self.y_test_r=None
+        self.y_pred_r=None
+        self.raw_mse=None
+        self.raw_rmse=None
+        self.raw_mae=None
+        self.raw_r2=None
+        self.coef=None
+        self.atac_gene_name=None
+        self.peak_pd=None
+        self.ridge_t=None
+        self.coef_threshold=None
+        self.max_threshold=None
+        self.y_test_f=None
+        self.y_pred_f=None
+        self.filter_err_dict=None
+        self.filter_r2=None
+        self.filter_coef=None
+        self.kendalltau_filter_pd=None
 
     def model_init(self,test_size:float=0.3,
                    random_state:int=112,alpha:float=0.1)->pd.DataFrame:
@@ -80,9 +105,8 @@ class Fate:
         self.raw_rmse=err_dict['rmse']
         self.raw_mae=err_dict['mae']
         self.raw_r2=r2
-        print("$MSE|RMSE|MAE|R^2$:{:.2}|{:.2}|{:.2}|{:.2}".format(err_dict['mse'],
-                                                                  err_dict['rmse'],
-                                                                  err_dict['mae'],r2))
+        print(f"$MSE|RMSE|MAE|R^2$:{err_dict['mse']:.2}|\
+              {err_dict['rmse']:.2}|{err_dict['mae']:.2}|{r2:.2}")
 
         res_pd_ievt=pd.DataFrame(index=self.adata.to_df().columns)
         res_pd_ievt['coef']=self.ridge.coef_
@@ -119,7 +143,7 @@ class Fate:
         related_genes=self.peak_pd.loc[peak,self.atac_gene_name].unique()
         return self.peak_pd.loc[self.peak_pd[self.atac_gene_name\
                                              ].isin(related_genes)].index.tolist()
-
+    #pylint: disable=too-many-locals
     def atr(self,params: ATRParams)->pd.DataFrame:
         """
         Adaptive Threshold Regression
@@ -147,7 +171,6 @@ class Fate:
         coef_threshold_li=[]
         r2_li=[]
         k=0
-        from tqdm import tqdm
         for i in tqdm(self.coef['abs(coef)'].values[1:]):
             coef_threshold_li.append(i)
             train_idx=self.coef.loc[self.coef['abs(coef)']>=i].index.values
@@ -183,13 +206,13 @@ class Fate:
         for i in res_pd.index:
             if res_pd.loc[i,'r2']>=self.raw_r2-flux:
                 self.coef_threshold=res_pd.loc[i,'coef_threshold']
-                print("coef_threshold:{}, r2:{}".format(res_pd.loc[i,'coef_threshold'],
-                                                        res_pd.loc[i,'r2']))
+                r2=res_pd.loc[i,'r2']
+                print(f"coef_threshold:{self.coef_threshold}, r2:{r2}")
                 break
 
         self.max_threshold=res_pd
         return res_pd
-
+    #pylint: disable=too-many-locals
     def model_fit(self,test_size:float=0.3,
                    random_state:int=112,
                    alpha:float=0.1,related=False)->pd.DataFrame:
@@ -227,14 +250,12 @@ class Fate:
         err_dict['mse'] = mean_squared_error(y_test, y_pred)
         err_dict['rmse'] = mean_squared_error(y_test, y_pred, squared=False)
         err_dict['mae'] = mean_absolute_error(y_test, y_pred)
-        self.filter_mse=err_dict['mse']
-        self.filter_rmse=err_dict['rmse']
-        self.filter_mae=err_dict['mae']
+        self.filter_err_dict=err_dict
         r2 = r2_score(y_test, y_pred)
         self.filter_r2=r2
-        print("$MSE|RMSE|MAE|R^2$:{:.2}|{:.2}|{:.2}|{:.2}".format(err_dict['mse'],
-                                                                  err_dict['rmse'],
-                                                                  err_dict['mae'],r2))
+        print(f"$MSE|RMSE|MAE|R^2$:{err_dict['mse']:.2}|\
+              { err_dict['rmse']:.2}|\
+                {err_dict['mae']:.2}|{r2:.2}")
 
         res_pd_ievt=pd.DataFrame(index=adata_t.to_df().columns)
         res_pd_ievt['coef']=self.ridge_f.coef_
@@ -245,6 +266,7 @@ class Fate:
         self.filter_coef=res_pd_ievt
         return res_pd_ievt
 
+    # pylint: disable=import-outside-toplevel
     def kendalltau_filter(self):
         """
         kendalltau filter
@@ -265,6 +287,8 @@ class Fate:
         self.kendalltau_filter_pd=test_pd
         return test_pd
 
+    # pylint: disable=import-outside-toplevel
+    # pylint: disable=too-many-arguments
     def low_density(self,
                     n_components: int = 10,
                     knn: int = 30,
@@ -292,7 +316,8 @@ class Fate:
         self.adata.obs["mellon_log_density_lowd"] = log_density
 
 
-
+    # pylint: disable=import-outside-toplevel
+    # pylint: disable=too-many-arguments
     def lineage_score(self,cluster_key:str,lineage=None,
                     cell_mask= "specification",
                     density_key: str = "mellon_log_density_lowd",
@@ -342,6 +367,7 @@ class Fate:
             return self.coef
         if coef_type=='filter':
             return self.filter_coef
+        return None
 
     def get_r2(self,r2_type:str='raw')->float:
         """
@@ -358,6 +384,7 @@ class Fate:
             return self.raw_r2
         if r2_type=='filter':
             return self.filter_r2
+        return None
 
     def get_mse(self,mse_type:str='raw')->pd.DataFrame:
         """
@@ -373,7 +400,8 @@ class Fate:
         if mse_type=='raw':
             return self.raw_mse
         if mse_type=='filter':
-            return self.filter_mse
+            return self.filter_err_dict['mse']
+        return None
 
     def get_rmse(self,rmse_type:str='raw')->pd.DataFrame:
         """
@@ -389,7 +417,8 @@ class Fate:
         if rmse_type=='raw':
             return self.raw_rmse
         if rmse_type=='filter':
-            return self.filter_rmse
+            return self.filter_err_dict['rmse']
+        return None
 
     def get_mae(self,mae_type:str='raw')->pd.DataFrame:
         """
@@ -405,7 +434,8 @@ class Fate:
         if mae_type=='raw':
             return self.raw_mae
         if mae_type=='filter':
-            return self.filter_mae
+            return self.filter_err_dict['mae']
+        return None
 
     def plot_filtering(self,figsize:tuple=(3,3),color:str='#5ca8dc',
                     fontsize:int=12,alpha:float=0.8)->tuple:
@@ -428,11 +458,11 @@ class Fate:
                     self.max_threshold['r2'],color=color,alpha=alpha)
         ax.axhline(y=self.raw_r2, c="red")
         ax.text(self.max_threshold['coef_threshold'].max(),self.raw_r2,
-                '$r^2:{:.2}$'.format(self.raw_r2),
+                f'$r^2:{self.raw_r2:.2}$'.format(),
                  fontsize=12,horizontalalignment='right')
         ax.axvline(x=self.coef_threshold, c="red")
         ax.text(self.coef_threshold,self.max_threshold['r2'].min(),
-                '$ATR:{:.2}$'.format(self.coef_threshold),
+                f'$ATR:{self.coef_threshold:.2}$'.format(),
                  fontsize=12,horizontalalignment='left')
         ax.spines['left'].set_position(('outward', 20))
         ax.spines['bottom'].set_position(('outward', 20))
@@ -450,7 +480,7 @@ class Fate:
         ax.spines['left'].set_visible(True)
         return fig,ax
 
-    def plot_fitting(self,type:str='raw',
+    def plot_fitting(self,plot_type:str='raw',
                      figsize:tuple=(3,3),color:str='#0d6a3b',
                     fontsize:int=12)->tuple:
         """
@@ -467,14 +497,16 @@ class Fate:
             ax: matplotlib.pyplot.axis, the axis of fitting result
         
         """
-        import seaborn as sns
         fig, ax = plt.subplots(figsize=figsize)
-        if type=='raw':
+        if plot_type=='raw':
             y_test=self.y_test_r
             y_pred=self.y_pred_r
-        elif type=='filter':
+        elif plot_type=='filter':
             y_test=self.y_test_f
             y_pred=self.y_pred_f
+        else:
+            y_test=None
+            y_pred=None
         sns.regplot(x=y_test,y=y_pred,ax=ax,line_kws={'color':color},
                 color=color)
         ax.spines['left'].set_position(('outward', 10))
@@ -490,16 +522,19 @@ class Fate:
         ax.spines['bottom'].set_visible(True)
         ax.spines['left'].set_visible(True)
 
-        if type=='filter':
+        if plot_type=='filter':
             ax.set_title(f'Dimension: {self.filter_coef.shape[0]}',
                          fontsize=fontsize)
-        elif type=='raw':
+        elif plot_type=='raw':
             ax.set_title(f'Dimension: {self.coef.shape[0]}',
                          fontsize=fontsize)
 
         return fig,ax
 
-    def plot_color_fitting(self,type:str='raw',cluster_key:str='clusters',
+    # pylint: disable=import-outside-toplevel
+    # pylint: disable=too-many-arguments
+    # pylint: disable=too-many-locals
+    def plot_color_fitting(self,plot_type:str='raw',cluster_key:str='clusters',
                      figsize:tuple=(3,3),color:str='#6BBBA0',
                     fontsize:int=12,legend_loc=None,omics='RNA')->tuple:
         """
@@ -523,17 +558,19 @@ class Fate:
         if legend_loc is None:
             legend_loc=[0.2,0.1,0]
         fig, ax = plt.subplots(figsize=figsize)
-        if type=='raw':
+        if plot_type=='raw':
             y_test=self.y_test_r
             y_pred=pd.Series(self.y_pred_r)
             y_pred.index=y_test.index
-        elif type=='filter':
+        elif plot_type=='filter':
             y_test=self.y_test_f
             y_pred=pd.Series(self.y_pred_f)
             y_pred.index=y_test.index
+        else:
+            return None
 
         from scipy.stats import linregress
-        slope, intercept, r_value, p_value, std_err = linregress(y_test, y_pred)
+        slope, intercept, _, _, std_err = linregress(y_test, y_pred)
         line = slope * y_test + intercept
 
         # 计算置信区间的上界和下界
@@ -544,9 +581,9 @@ class Fate:
 
         #color_dict
         self.adata.obs[cluster_key]=self.adata.obs[cluster_key].astype('category')
-        if '{}_colors'.format(cluster_key) in self.adata.uns.keys():
+        if f'{cluster_key}_colors' in self.adata.uns.keys():
             color_dict=dict(zip(self.adata.obs[cluster_key].cat.categories.tolist(),
-                            self.adata.uns['{}_colors'.format(cluster_key)]))
+                            self.adata.uns['{cluster_key}_colors']))
         else:
             if len(self.adata.obs[cluster_key].cat.categories)>28:
                 color_dict=dict(zip(self.adata.obs[cluster_key].cat.categories,
@@ -563,7 +600,7 @@ class Fate:
                                                        i].index)&set(y_pred.index))],
                     color=color_dict[i])
         ax.plot(y_test, line, color=color,
-                label='Fit: y = {:.2f}x + {:.2f}'.format(slope, intercept),
+                label=f'Fit: y = {slope:.2f}x + {intercept:.2f}',
             linewidth=3)
         ax.fill_between(y_test, lower_bound, upper_bound,
                         color='grey', alpha=0.2, label='95% Confidence Interval')
@@ -583,16 +620,16 @@ class Fate:
         ax.spines['bottom'].set_visible(True)
         ax.spines['left'].set_visible(True)
 
-        from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
+
         mse = mean_squared_error(y_test, y_pred)
         #rmse = mean_squared_error(y_test, y_pred, squared=False)
         mae = mean_absolute_error(y_test, y_pred)
         r2 = r2_score(y_test, y_pred)
-        ax.text(1,legend_loc[0],'$r^2={:.2}$'.format(r2),
+        ax.text(1,legend_loc[0],f'$r^2={r2:.2}$',
                 fontsize=fontsize+1,horizontalalignment='right')
-        ax.text(1,legend_loc[1],'$MSE={:.2}$'.format(mse),
+        ax.text(1,legend_loc[1],f'$MSE={mse:.2}$',
                 fontsize=fontsize+1,horizontalalignment='right')
-        ax.text(1,legend_loc[2],'$MAE={:.2}$'.format(mae),
+        ax.text(1,legend_loc[2],f'$MAE={mae:.2}$',
                 fontsize=fontsize+1,horizontalalignment='right')
 
         if type=='filter':
@@ -622,8 +659,15 @@ class GeneTrends:
         self.adata=adata
         self.pseudotime=pseudotime
         self.var_names=var_names
+        self.normalized_pd=None
+        self.normalized_data=None
+        self.max_avg_li=None
+        self.kt=None
+        self.lr=None
 
-
+    # pylint: disable=import-outside-toplevel
+    # pylint: disable=too-many-locals
+    # pylint: disable=too-many-arguments
     def calculate(self,n_convolve=None):
         """
         Calculate the trends of gene with pseudotime
@@ -632,10 +676,6 @@ class GeneTrends:
             n_convolve: int, the number of convolve to smooth the trends
         
         """
-        import numpy as np
-        from scipy.spatial.distance import euclidean
-
-
         from scipy.sparse import issparse
 
         adata=self.adata
@@ -644,12 +684,12 @@ class GeneTrends:
 
         time = adata.obs[pseudotime].values
         time = time[np.isfinite(time)]
-        X = (
+        x = (
             adata[:, var_names].X
         )
-        if issparse(X):
-            X = X.A
-        df = pd.DataFrame(X[np.argsort(time)], columns=var_names)
+        if issparse(x):
+            x = x.A
+        df = pd.DataFrame(x[np.argsort(time)], columns=var_names)
 
 
         if n_convolve is not None:
@@ -659,7 +699,6 @@ class GeneTrends:
                     df[gene] = np.convolve(df[gene].values, weights, mode="same")
                 except ValueError as e:
                     print(f"Skipping variable {gene}: {e}")
-                    pass  # e.g. all-zero counts or nans cannot be convolved
 
         max_sort = np.argsort(np.argmax(df.values, axis=0))
         df = pd.DataFrame(df.values[:, max_sort], columns=df.columns[max_sort])
@@ -669,7 +708,6 @@ class GeneTrends:
                                         columns=df.columns,
                                         index=adata.obs[pseudotime].sort_values().index)
         self.normalized_data=normalized_data
-        from statsmodels.tsa.stattools import adfuller
 
         # 生成示例时间序列数据
         np.random.seed(0)
@@ -803,7 +841,7 @@ class GeneTrends:
             for cluster2 in adata.obs[cluster_key].cat.categories:
                 if f"{cluster2}_{cluster1}" in border_gene_dict:
                     continue
-                
+
                 if cluster1!=cluster2:
                     border_gene_dict[cluster1+'_'+\
                                         cluster2]=self.get_border_gene(adata,
@@ -829,7 +867,7 @@ class GeneTrends:
         # the border gene can't appear in other cluster
         border_gene_dict=self.get_multi_border_gene(adata,cluster_key,num_gene=10)
         cluster_name=f"{cluster1}_{cluster2}"
-        if cluster_name not in border_gene_dict.keys():
+        if cluster_name not in border_gene_dict:
             cluster_name=f"{cluster2}_{cluster1}"
 
         border_genes=border_gene_dict[cluster_name]
@@ -840,6 +878,7 @@ class GeneTrends:
                         border_genes=border_genes.drop(border_gene)
         return border_genes
 
+    #pylint: disable=too-many-arguments
     def get_kernel_gene(self,adata:anndata.AnnData,cluster_key:str,cluster:str,
                         num_gene:int=10,threshold=None):
         """
@@ -859,7 +898,7 @@ class GeneTrends:
         if threshold is None:
             threshold=self.normalized_pd.mean().mean()
         cell_idx=adata.obs[(adata.obs[cluster_key].isin([cluster])&\
-                            (adata.obs['border']==False))].index
+                            (adata.obs['border'] is False))].index
         data=self.normalized_pd.loc[cell_idx,:]
         #border_gene=data.mean().sort_values(ascending=False).index[:num_gene]
         # border_gene must larger than threshold
@@ -963,7 +1002,8 @@ class GeneTrends:
         ax.set_xlabel(xlabel,fontsize=fontsize+1)
         return fig,ax
 
-
+# pylint: disable=import-outside-toplevel
+# pylint: disable=too-many-arguments
 def mellon_density(adata,
                     n_components: int = 10,
                     knn: int = 30,
