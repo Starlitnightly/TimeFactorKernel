@@ -19,7 +19,7 @@ Cellular pseudotime-related factors characterize participants in the temporal pr
 ````shell
 .
 ├── omicfate                  # Main Python package
-├── experiment            # Documentation files
+├── experiment                # Documentation files
 ├── LICENSE
 └── README.md
 ````

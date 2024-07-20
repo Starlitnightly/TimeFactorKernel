@@ -1,1 +1,1 @@
-from ._omicfate import CellFateGenie
+from ._omicfate import Fate
